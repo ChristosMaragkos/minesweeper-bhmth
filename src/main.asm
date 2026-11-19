@@ -162,7 +162,7 @@ main:
     jsr advance_time
     jsr decode_time
     jsr print_time
-	jmp main
+	jrel main
 
 setup_ivt:
 	ld    al, .pageof rom_ivt_start
@@ -185,7 +185,10 @@ advance_time:
 
     ld a, [b]
     inc a
+    cmp a, 999
+    jgtu .1
     st a, [b]
+    .1:
     rts
 
     .0:
@@ -217,13 +220,13 @@ print_time:
     push d
     ld a, time_digits
     ld b, board_buffer + 58
-    ld dl, 2
+    ld dl, 3
     .0:
     ld cl, [a+]
     zxt cl
     add c, TILE_DIGIT_0 | (1 << 10) ; Convert to digit tile + second palette
     st c, [b+]
-    djnc dl, .0
+    djnz dl, .0
     pop d
     rts
 
@@ -422,7 +425,7 @@ game_over:
         .3:
         xor al, al
         st.l al, [NOICTRL]
-        jmp .2
+        jrel .2
 
 ; pressing B on an uncovered tile does nothing. Pressing B on a covered tile cycles:
 ; no overlay -> flag -> question
@@ -655,7 +658,7 @@ place_mines:
     shove push, d, e, f
     jsr seed_xorshift
 
-    ld f, MINE_COUNT - 1
+    ld f, MINE_COUNT
     .0:
         jsr randi_xorshift
         divu a, ROWS
@@ -681,7 +684,7 @@ place_mines:
 
         or al, CELL_HAS_MINE
         st al, [c]
-        djnc f, .0
+        djnz f, .0
 
     ld a, (TOTAL_ROWS * TOTAL_COLS) - 1
     ld b, grid
@@ -762,10 +765,10 @@ init_grid:
     ld al, CELL_COVERED
     ld b, INNER_GRID_START
     .3:
-    ld c, COLUMNS - 1
+    ld c, COLUMNS
     .4:
         st al, [b+]
-        djnc cl, .4
+        djnz c, .4
     add b, 2
     cmp b, grid + ((TOTAL_ROWS - 1) * TOTAL_COLS) + 1
     jltu .3
