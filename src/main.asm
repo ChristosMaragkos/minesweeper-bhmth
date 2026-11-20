@@ -10,6 +10,7 @@
 
 .wram
 ; Holds grid graphics (covered and revealed cells) as well as the cursor
+variables_start:
 board_buffer:
     .space 2048
 
@@ -67,12 +68,24 @@ cells_remaining:
 
 time_digits:
     .space 3
+variables_end:
+    .equ VARIABLES_SIZE, variables_end - variables_start
 
 .rom
 
 _start:
     sei
 	jsr setup_ivt
+
+    xor a, a
+    ld b, VARIABLES_SIZE
+    bt bl, 1
+    jnz .2
+    st al, [b-]
+    .2:
+        st a, [b]
+        djnc b, .2
+
     jsr init_grid
 
     ld al, TOTAL_COLS + 1
@@ -425,6 +438,11 @@ game_over:
         .3:
         xor al, al
         st.l al, [NOICTRL]
+        ld.l a, [JOYPAD1]
+        bt a, BTN_START
+        jz .4
+        jmp _start
+        .4:
         jrel .2
 
 ; pressing B on an uncovered tile does nothing. Pressing B on a covered tile cycles:
@@ -455,6 +473,12 @@ handle_input_command:
     add c, overlays_buffer
 
     ld.l a, [JOYPAD1]
+    
+    bt a, BTN_START
+    jz .10
+    jmp _start
+
+    .10:
     bt a, BTN_A
     jz .6
 

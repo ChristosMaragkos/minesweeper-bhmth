@@ -10,9 +10,11 @@ It's not complete yet (game over hangs and winning does nothing), so I'll (hopef
 - `behemoth minesweeper.bhm`
 
 Controls:
+
 - Arrow keys to move cursor
 - Z to flag a potential mine, Z again to turn it into a question mark, Z to clear
 - X to reveal a cell
+- Enter to restart
 
 Game "ends" when you either reveal a cell with a mine on it or when you reveal all empty cells.
 
