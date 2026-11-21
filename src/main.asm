@@ -134,6 +134,13 @@ _begin_game:
 	st al, [BG3CTRL]
 	st al, [BG4CTRL]
 
+    xor a, a
+    ld b, BG1HOFS
+    st a, [b+]
+    st a, [b+]
+    st a, [b+]
+    st a, [b+]
+
 	ld a, TILESET_VRAM_START
 	st a, [BG1GFXSRC]
 	st a, [BG2GFXSRC]
@@ -558,6 +565,24 @@ game_over:
 
     ld d, TILE_MINE_BOOM
     st d, [c]
+
+    ; screen shake
+    ld cl, 20
+    .3:
+        jsr randi_xorshift
+        mov b, a
+        and a, 0b11
+        sub a, 2
+        st.l a, [BG1HOFS]
+        st.l a, [BG2HOFS]
+        swp b
+        and b, 0b11
+        sub b, 2
+        st.l b, [BG1VOFS]
+        st.l b, [BG2VOFS]
+        wfi
+        djnz cl, .3
+
     .2:
         wfi
         ld.l a, [JOYPAD1]
