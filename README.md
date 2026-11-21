@@ -1,7 +1,7 @@
 # Minesweeper for BHMTH
 
 This is a "simple" minesweeper demo I wrote in a little less than 1000 lines of assembly for BHMTH.
-It's not complete yet (game over hangs and winning does nothing), so I'll (hopefully have the will to) update it at some point.
+It's mostly complete (you can now win the game, lose the game and even restart, and there's sound effects) but I might come back to it.
 
 ## Running
 
