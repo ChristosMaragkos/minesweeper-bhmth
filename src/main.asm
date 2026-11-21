@@ -42,9 +42,6 @@ xorshift_state:
 grid:
     .space TOTAL_ROWS * TOTAL_COLS
 
-game_state:
-    .space 1
-
 frames_elapsed:
     .space 1
 
@@ -66,6 +63,12 @@ mines_placed:
 cells_remaining:
     .space 2
 
+mines_remaining:
+    .space 2
+
+mines_digits:
+    .space 5
+
 time_digits:
     .space 3
 variables_end:
@@ -75,8 +78,10 @@ variables_end:
 
 _start:
     sei
+    ld sp, 0xFFFE
 	jsr setup_ivt
 
+_begin_game:
     xor a, a
     ld b, VARIABLES_SIZE
     bt bl, 1
@@ -96,12 +101,11 @@ _start:
 	mtdp al
 
     ld b, MASVOL
-    ld al, [b]
-    lsr al, 3
+    ld al, 0xff >> 3
     st al, [b+]
-    ld al, [b]
-    lsr al, 3
     st al, [b]
+    xor al, al
+    st al, [NOICTRL]
 
     ld al, 6
 	st al, [BACKDROP]
@@ -137,7 +141,18 @@ _start:
     xor a, a
     mtdp al
 
+    ld a, MINE_COUNT
+    st a, [mines_remaining]
+
+    ld a, TOTAL_COLS + 1
+    st a, [selected_cell]
+    st a, [last_selected_cell]
+
     ld b, board_buffer
+    ld a, TILE_CLOCK
+    st a, [b + 56]
+    ld a, TILE_MINE
+    st a, [b]
     add b, GRID_START_POS * 2
     ld a, TILE_COVERED ; tile entry: second tile, nothing else
 
@@ -171,11 +186,32 @@ main:
 
     jsr handle_input_command
 
+    ld a, [cells_remaining]
+    cmp a, 0
+    jgtu .0
+
+    .0:
     wfi
     jsr advance_time
-    jsr decode_time
-    jsr print_time
+    jsr decode_state
+    jsr print_state
 	jrel main
+
+win_game:
+    ld al, MMIO_PAGE
+    mtdp al
+
+    ld a, 0x0F00
+    st a, [PULADSR]
+    ld a, 0x6E00
+    st a, [PULPITCH]
+    ld al, 0b100010
+    st al, [PULCTRL]
+    xor al, al
+    mtdp al
+    wait_for_input:
+        wfi
+        jrel wait_for_input
 
 setup_ivt:
 	ld    al, .pageof rom_ivt_start
@@ -208,12 +244,20 @@ advance_time:
     st al, [b]
     rts
 
-decode_time:
+decode_state:
     ld b, time_digits
+    ld c, mines_digits
     xor al, al
     st al, [b+]
     st al, [b+]
     st al, [b]
+
+    st al, [c+]
+    st al, [c+]
+    st al, [c+]
+    st al, [c+]
+    st al, [c]
+    push c
 
     ld a, [seconds_elapsed]
 
@@ -227,10 +271,24 @@ decode_time:
         jgeu .0
 
     .1:
+    ld a, [mines_remaining]
+    pop b
+
+    .2:
+        cmp a, 0
+        jz .3
+        divu a, 10
+        mfhi cl
+        st cl, [b-]
+        cmp b, mines_digits
+        jgeu .2
+
+    .3:
     rts
 
-print_time:
+print_state:
     push d
+
     ld a, time_digits
     ld b, board_buffer + 58
     ld dl, 3
@@ -240,6 +298,17 @@ print_time:
     add c, TILE_DIGIT_0 | (1 << 10) ; Convert to digit tile + second palette
     st c, [b+]
     djnz dl, .0
+
+    ld a, mines_digits
+    ld b, board_buffer + 2
+    ld dl, 5
+    .1:
+    ld cl, [a+]
+    zxt cl
+    add c, TILE_DIGIT_0 | (1 << 10) ; Convert to digit tile + second palette
+    st c, [b+]
+    djnz dl, .1
+
     pop d
     rts
 
@@ -386,7 +455,7 @@ enqueue_cell:
 game_over:
     ld al, MMIO_PAGE
     mtdp al
-    ld a, 0x06F9
+    ld a, 0x0905
     st a, [NOIADSR]
     ld a, 100
     st a, [NOIRATE]
@@ -423,26 +492,13 @@ game_over:
 
     ld d, TILE_MINE_BOOM
     st d, [c]
-    ld al, 255
-    st al, [game_state]
     .2:
         wfi
-        ld al, [0]
-        cmp al, 0
-        jz .3
-
-        dec al
-        st al, [0]
-        jmp .2
-
-        .3:
-        xor al, al
-        st.l al, [NOICTRL]
         ld.l a, [JOYPAD1]
-        bt a, BTN_START
-        jz .4
+        bt al, BTN_START
+        jz .3
         jmp _start
-        .4:
+        .3:
         jrel .2
 
 ; pressing B on an uncovered tile does nothing. Pressing B on a covered tile cycles:
@@ -536,6 +592,9 @@ handle_input_command:
     jnz .2
 
     ; if covered with no marks, cycle to flag (tile 4)
+    ld a, [mines_remaining]
+    dec a
+    st a, [mines_remaining]
     ld a, TILE_FLAG
     ld dl, CELL_FLAGGED
     jmp .4
@@ -545,6 +604,10 @@ handle_input_command:
     jnz .3
 
     ; if it's flagged, cycle to question mark (tile 17)
+    ld a, [mines_remaining]
+    inc a
+    st a, [mines_remaining]
+
     ld a, TILE_QUESTION
     ld dl, CELL_QUESTION
     jmp .4
@@ -848,6 +911,9 @@ tileset_start:
 tileset_end:
 	.equ TILESET_LEN, tileset_end - tileset_start
     .equ TILESET_VRAM_START, 2048 * 4
+
+win_tiles_start:
+    .incbin "../build/assets/win.bin"
 
 palette_start:
 	.incbin "../build/assets/tileset.pal"

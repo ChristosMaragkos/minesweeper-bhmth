@@ -36,7 +36,7 @@
 .equ TILE_MINE, 5
 .equ TILE_MINE_BOOM, 6
 .equ TILE_DIGIT_0, 7
-.equ TILE_COLON, 17
+.equ TILE_CLOCK, 17
 .equ TILE_QUESTION, 18
 
 .equ CELL_IS_BORDER, 0xFF ; ignore everything else, this cell is a border
