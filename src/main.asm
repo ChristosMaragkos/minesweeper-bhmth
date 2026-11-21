@@ -18,6 +18,9 @@ board_buffer:
 overlays_buffer:
     .space 2048
 
+win_buffer:
+    .space 1024
+
 movement_input_delay_frames:
     .space 1
 
@@ -97,6 +100,20 @@ _begin_game:
     st al, [selected_cell]
     st al, [last_selected_cell]
 
+    ld a, (ROWS * COLUMNS) - MINE_COUNT
+    st a, [cells_remaining]
+
+    ld a, 1 | (1 << 10)
+    ld b, win_buffer + (13 * 2) ; row 0, column (32 - 5) / 2
+    ld dl, 5
+    .3:
+        st a, [b+]
+        mov c, a
+        inc a
+        add c, 5
+        st c, [b + 62]
+        djnz dl, .3
+
 	ld   al, MMIO_PAGE
 	mtdp al
 
@@ -120,9 +137,11 @@ _begin_game:
 	ld a, TILESET_VRAM_START
 	st a, [BG1GFXSRC]
 	st a, [BG2GFXSRC]
-	st a, [BG3GFXSRC]
 	st a, [BG4GFXSRC]
 	st a, [OAMGFXSRC]
+
+    ld a, TILESET_VRAM_START + TILESET_LEN + 32
+	st a, [BG3GFXSRC]
 
     ld a, 2048
     st a, [BG2ESRC]
@@ -135,6 +154,7 @@ _begin_game:
 	st al, [PPUCTRL]
 
 	vdma_vram tileset_start, (TILESET_VRAM_START + 32), TILESET_LEN
+    vdma_vram win_tiles_start, (TILESET_VRAM_START + TILESET_LEN + 32 + 32), WIN_TILES_LEN
 	vdma_cram palette_start, 0, PALETTE_LEN
 
     mfdp dl
@@ -190,6 +210,8 @@ main:
     cmp a, 0
     jgtu .0
 
+    jsr win_game
+
     .0:
     wfi
     jsr advance_time
@@ -201,17 +223,61 @@ win_game:
     ld al, MMIO_PAGE
     mtdp al
 
-    ld a, 0x0F00
+    ld al, 0b00000100
+    st al, [BG3CTRL]
+
+    ld a, 0x00F0
     st a, [PULADSR]
-    ld a, 0x6E00
+
+    ld a, 0x20B4
     st a, [PULPITCH]
-    ld al, 0b100010
+
+    ld al, 0b00100110
     st al, [PULCTRL]
+    ld al, 10
+    jsr wait_frames
+
+    ld al, 0b00100100
+    st al, [PULCTRL]
+    ld al, 5
+    jsr wait_frames
+
+    ld al, 0b00100110
+    st al, [PULCTRL]
+    ld al, 5
+    jsr wait_frames
+
+    ld al, 0b00100100
+    st al, [PULCTRL]
+    ld al, 2
+    jsr wait_frames
+
+    ld a, 0x3100
+    st a, [PULPITCH]
+    ld al, 0b100110
+    st al, [PULCTRL]
+
+    ld al, 24
+    jsr wait_frames
+
+    ld al, 0b100000
+    st al, [PULCTRL]
+
     xor al, al
     mtdp al
     wait_for_input:
         wfi
-        jrel wait_for_input
+        ld.l a, [JOYPAD1]
+        bt a, BTN_START
+        jz wait_for_input
+        jmp _start
+
+; al -> amount
+wait_frames:
+    .0:
+    wfi
+    djnz al, .0
+    rts
 
 setup_ivt:
 	ld    al, .pageof rom_ivt_start
@@ -496,10 +562,8 @@ game_over:
         wfi
         ld.l a, [JOYPAD1]
         bt al, BTN_START
-        jz .3
+        jz .2
         jmp _start
-        .3:
-        jrel .2
 
 ; pressing B on an uncovered tile does nothing. Pressing B on a covered tile cycles:
 ; no overlay -> flag -> question
@@ -802,10 +866,8 @@ place_mines:
         .2:
             djnc a, .1
 
-    ld al, 1
+    ld al, true
     st al, [mines_placed]
-    ld a, (ROWS * COLUMNS) - MINE_COUNT
-    st a, [cells_remaining]
     shove pop, d, e, f
     rts
 
@@ -887,11 +949,13 @@ render_cursor:
 
 _isr_vblnk:
     shove push, a, b, c, hi, dp
+    xor al, al
+    mtdp al
     jsr render_cursor
 
     ld al, MMIO_PAGE
     mtdp al
-    vdma_vram board_buffer, 0, 4096
+    vdma_vram board_buffer, 0, 5120
 
     shove pop, a, b, c, hi, dp
 	rti
@@ -914,6 +978,8 @@ tileset_end:
 
 win_tiles_start:
     .incbin "../build/assets/win.bin"
+win_tiles_end:
+    .equ WIN_TILES_LEN, win_tiles_end - win_tiles_start
 
 palette_start:
 	.incbin "../build/assets/tileset.pal"
