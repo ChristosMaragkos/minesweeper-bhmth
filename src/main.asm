@@ -4,9 +4,11 @@
 
 .header
     .ascii "BHM"
-    .byte  1
+    .byte  2
     .ascii "WINMINE "
-    .space 20, 0x00
+    .byte 1
+    .byte 0
+    .space 18, 0x00
 
 .wram
 ; Holds grid graphics (covered and revealed cells) as well as the cursor
